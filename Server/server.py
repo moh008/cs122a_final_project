@@ -22,7 +22,7 @@ from threading import Thread
 from Command import COMMAND as cmd
 
 class Server:   
-    def __init__(self):
+    def __init__(self):                       #Creates features objects
         self.PWM=Motor()
         self.servo=Servo()
         self.led=Led()
@@ -54,14 +54,14 @@ class Server:
         print('Server address: '+HOST)
         
         
-    def StopTcpServer(self):
+    def StopTcpServer(self): #When no client try to connect Server
         try:
             self.connection.close()
             self.connection1.close()
         except Exception ,  e:
             print '\n'+"No client connection"
          
-    def Reset(self):
+    def Reset(self): #initialize Server, server thread
         self.StopTcpServer()
         self.StartTcpServer()
         self.SendVideo=Thread(target=self.sendvideo)
@@ -105,25 +105,33 @@ class Server:
             pass
                  
     def stopMode(self):
-        try:
+        try: #Infrared Line tracking drive
             stop_thread(self.infraredRun)
             self.PWM.setMotorModel(0,0,0,0)
         except:
             pass
-        try:
+        try:  #Light tracking drive, need to stop DC motor
             stop_thread(self.lightRun)
             self.PWM.setMotorModel(0,0,0,0)
         except:
             pass            
-        try:
+        try:  #ultrasonic obstacle avoidance drive, need to stop servo and DC motor
             stop_thread(self.ultrasonicRun)
             self.PWM.setMotorModel(0,0,0,0)
             self.servo.setServoPwm('0',90)
             self.servo.setServoPwm('1',90)
         except:
             pass
+        #---------------------------------------------------------------
+        try: #nodrill, which uses 2 servos, ultrasonic sensor, buzzer
+            stop_thread(self.nodrill)
+            self.servo.setServoPwm('0', 90)
+            self.servo.setServoPwm('0', 90)
+        except:
+            pass
+        #---------------------------------------------------------------
         
-    def readdata(self):
+    def readdata(self): #implement connection, read client commands
             try:
                 self.connection1,self.client_address1 = self.server_socket1.accept()
                 print "Client connection successful !"
@@ -152,32 +160,40 @@ class Server:
                         restCmd=cmdArray[-1]
                         cmdArray=cmdArray[:-1]     
             
-                for oneCmd in cmdArray:
+                for oneCmd in cmdArray:       #When a command from client, run specific mode
                     data=oneCmd.split("#")
                     if data==None:
                         continue
                     elif cmd.CMD_MODE in data:
-                        if data[1]=='one':
+                        if data[1]=='one':    #Free drive
                             self.stopMode()
                             self.Mode='one'
-                        elif data[1]=='two':
+                        elif data[1]=='two':  #Light tracking drive using photoresistor
                             self.stopMode()
                             self.Mode='two'
                             self.lightRun=Thread(target=self.light.run)
                             self.lightRun.start()
-                        elif data[1]=='three':
+                        elif data[1]=='three':#Obstacle avoidance drive using ultrasonic sensor
                             self.stopMode()
                             self.Mode='three'
                             self.ultrasonicRun=threading.Thread(target=self.ultrasonic.run)
                             self.ultrasonicRun.start()
-                        elif data[1]=='four':
+                        elif data[1]=='four': #Infrared Line tracking drive
                             self.stopMode()
                             self.Mode='four'
                             self.infraredRun=threading.Thread(target=self.infrared.run)
                             self.infraredRun.start()
+                        #add nodrill thread here    
+                        #-------------------------------------------------------------
+                        elif data[1]=='five':
+                            self.stopMode()
+                            self.Mode='five'
+                            self.nodrill = threading.Thread(target=self.nodrill.run)
+                            self.nodrill.start()
+                        #--------------------------------------------------------------
                             
                     elif (cmd.CMD_MOTOR in data) and self.Mode=='one':
-                        try:
+                        try: #Free drive, move DC motors
                             data1=int(data[1])
                             data2=int(data[2])
                             data3=int(data[3])
